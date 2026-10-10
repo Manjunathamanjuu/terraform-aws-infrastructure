@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -17,8 +18,8 @@ pipeline {
 
     environment {
         TF_IN_AUTOMATION = 'true'
-        AWS_DEFAULT_REGION = 'us-east-1'
-        AWS_REGION = 'us-east-1'
+        CLOUDSDK_CORE_PROJECT = 'YOUR_GCP_PROJECT_ID'
+        CLOUDSDK_COMPUTE_REGION = 'us-central1'
     }
 
     stages {
@@ -29,20 +30,39 @@ pipeline {
             }
         }
 
-        stage('Terraform Setup & Validation') {
+        stage('GCP Authentication & Terraform Validation') {
             steps {
                 withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-jenkins-credentials']
+                    file(
+                        credentialsId: 'gcp-jenkins-credentials',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    )
                 ]) {
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "AWS Identity"
+                        echo "GCP Authentication"
                         echo "======================================"
 
-                        aws sts get-caller-identity
+                        gcloud auth activate-service-account \
+                          --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+
+                        gcloud config set project "$CLOUDSDK_CORE_PROJECT"
+
+                        echo ""
+                        echo "======================================"
+                        echo "GCP Identity"
+                        echo "======================================"
+
+                        gcloud auth list
+
+                        echo ""
+                        echo "======================================"
+                        echo "GCP Project"
+                        echo "======================================"
+
+                        gcloud config get-value project
 
                         echo ""
                         echo "======================================"
@@ -53,10 +73,10 @@ pipeline {
 
                         echo ""
                         echo "======================================"
-                        echo "AWS CLI Version"
+                        echo "Google Cloud CLI Version"
                         echo "======================================"
 
-                        aws --version
+                        gcloud --version
 
                         echo ""
                         echo "======================================"
@@ -81,7 +101,7 @@ pipeline {
 
                         echo ""
                         echo "======================================"
-                        echo "Terraform Setup & Validation Completed"
+                        echo "GCP Setup & Validation Completed"
                         echo "======================================"
                     '''
                 }
@@ -91,14 +111,16 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-jenkins-credentials']
+                    file(
+                        credentialsId: 'gcp-jenkins-credentials',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    )
                 ]) {
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "Terraform Plan"
+                        echo "Terraform Plan - GCP"
                         echo "======================================"
 
                         terraform plan -out=tfplan
@@ -120,18 +142,14 @@ pipeline {
 
             steps {
                 script {
-
                     if (params.ACTION == 'apply') {
-
                         input(
-                            message: 'Do you want to APPLY the Terraform infrastructure?',
+                            message: 'Do you want to APPLY the GCP Terraform infrastructure?',
                             ok: 'Proceed'
                         )
-
                     } else {
-
                         input(
-                            message: 'WARNING: Do you want to DESTROY the Terraform infrastructure?',
+                            message: 'WARNING: Do you want to DESTROY the GCP Terraform infrastructure?',
                             ok: 'Proceed'
                         )
                     }
@@ -148,14 +166,16 @@ pipeline {
 
             steps {
                 withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-jenkins-credentials']
+                    file(
+                        credentialsId: 'gcp-jenkins-credentials',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    )
                 ]) {
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "Terraform Apply"
+                        echo "Terraform Apply - GCP"
                         echo "======================================"
 
                         terraform apply -auto-approve tfplan
@@ -176,14 +196,16 @@ pipeline {
 
             steps {
                 withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-jenkins-credentials']
+                    file(
+                        credentialsId: 'gcp-jenkins-credentials',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    )
                 ]) {
                     sh '''
                         set -e
 
                         echo "======================================"
-                        echo "Terraform Destroy"
+                        echo "Terraform Destroy - GCP"
                         echo "======================================"
 
                         terraform destroy -auto-approve
@@ -204,12 +226,16 @@ pipeline {
 
             steps {
                 withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                     credentialsId: 'aws-jenkins-credentials']
+                    file(
+                        credentialsId: 'gcp-jenkins-credentials',
+                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
+                    )
                 ]) {
                     sh '''
+                        set -e
+
                         echo "======================================"
-                        echo "Terraform Outputs"
+                        echo "Terraform Outputs - GCP"
                         echo "======================================"
 
                         terraform output
@@ -223,23 +249,22 @@ pipeline {
     }
 
     post {
-
         success {
             echo "======================================"
-            echo "Terraform Pipeline Completed Successfully"
+            echo "GCP Terraform Pipeline Completed Successfully"
             echo "======================================"
         }
 
         failure {
             echo "======================================"
-            echo "Terraform Pipeline Failed"
+            echo "GCP Terraform Pipeline Failed"
             echo "Please check the Jenkins console logs."
             echo "======================================"
         }
 
         aborted {
             echo "======================================"
-            echo "Terraform Pipeline Aborted"
+            echo "GCP Terraform Pipeline Aborted"
             echo "======================================"
         }
 
@@ -250,3 +275,4 @@ pipeline {
         }
     }
 }
+```
