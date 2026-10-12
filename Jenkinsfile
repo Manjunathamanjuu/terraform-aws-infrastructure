@@ -5,7 +5,6 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
-        ansiColor('xterm')
     }
 
     parameters {
@@ -18,8 +17,9 @@ pipeline {
 
     environment {
         TF_IN_AUTOMATION = 'true'
-        CLOUDSDK_CORE_PROJECT = 'YOUR_GCP_PROJECT_ID'
-        CLOUDSDK_COMPUTE_REGION = 'us-central1'
+        TF_INPUT = 'false'
+        AWS_DEFAULT_REGION = 'us-east-1'
+        AWS_REGION = 'us-east-1'
     }
 
     stages {
@@ -30,80 +30,57 @@ pipeline {
             }
         }
 
-        stage('GCP Authentication & Terraform Validation') {
+        stage('AWS Authentication & Terraform Validation') {
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'gcp-jenkins-credentials',
-                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
-                    )
-                ]) {
-                    sh '''
-                        set -e
-
-                        echo "======================================"
-                        echo "GCP Authentication"
-                        echo "======================================"
-
-                        gcloud auth activate-service-account \
-                          --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-
-                        gcloud config set project "$CLOUDSDK_CORE_PROJECT"
-
-                        echo ""
-                        echo "======================================"
-                        echo "GCP Identity"
-                        echo "======================================"
-
-                        gcloud auth list
-
-                        echo ""
-                        echo "======================================"
-                        echo "GCP Project"
-                        echo "======================================"
-
-                        gcloud config get-value project
-
-                        echo ""
-                        echo "======================================"
-                        echo "Terraform Version"
-                        echo "======================================"
-
+                script {
+                    bat '''
+                        @echo off
+                        echo ======================================
+                        echo Terraform Version
+                        echo ======================================
                         terraform version
+                        if errorlevel 1 exit /b 1
 
-                        echo ""
-                        echo "======================================"
-                        echo "Google Cloud CLI Version"
-                        echo "======================================"
+                        echo.
+                        echo ======================================
+                        echo Terraform Init
+                        echo ======================================
+                        terraform init -input=false
+                        if errorlevel 1 exit /b 1
 
-                        gcloud --version
-
-                        echo ""
-                        echo "======================================"
-                        echo "Terraform Init"
-                        echo "======================================"
-
-                        terraform init -upgrade
-
-                        echo ""
-                        echo "======================================"
-                        echo "Terraform Format Check"
-                        echo "======================================"
-
+                        echo.
+                        echo ======================================
+                        echo Terraform Format Check
+                        echo ======================================
                         terraform fmt -check -recursive
+                        if errorlevel 1 exit /b 1
 
-                        echo ""
-                        echo "======================================"
-                        echo "Terraform Validate"
-                        echo "======================================"
-
+                        echo.
+                        echo ======================================
+                        echo Terraform Validate
+                        echo ======================================
                         terraform validate
-
-                        echo ""
-                        echo "======================================"
-                        echo "GCP Setup & Validation Completed"
-                        echo "======================================"
+                        if errorlevel 1 exit /b 1
                     '''
+
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                         credentialsId: 'aws-jenkins-credentials']
+                    ]) {
+                        bat '''
+                            @echo off
+                            echo ======================================
+                            echo AWS Authentication
+                            echo ======================================
+                            aws sts get-caller-identity
+                            if errorlevel 1 exit /b 1
+
+                            echo.
+                            echo AWS CLI Version
+                            aws --version
+                            if errorlevel 1 exit /b 1
+                        '''
+                    }
                 }
             }
         }
@@ -111,23 +88,32 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'gcp-jenkins-credentials',
-                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-jenkins-credentials']
                 ]) {
-                    sh '''
-                        set -e
-
-                        echo "======================================"
-                        echo "Terraform Plan - GCP"
-                        echo "======================================"
-
-                        terraform plan -out=tfplan
-
-                        echo ""
-                        echo "Terraform Plan Completed Successfully"
-                    '''
+                    script {
+                        if (params.ACTION == 'destroy') {
+                            bat '''
+                                @echo off
+                                echo ======================================
+                                echo Terraform Destroy Plan - AWS
+                                echo ======================================
+                                terraform plan -destroy -input=false -out=tfplan
+                                if errorlevel 1 exit /b 1
+                                terraform show -no-color tfplan
+                            '''
+                        } else {
+                            bat '''
+                                @echo off
+                                echo ======================================
+                                echo Terraform Plan - AWS
+                                echo ======================================
+                                terraform plan -input=false -out=tfplan
+                                if errorlevel 1 exit /b 1
+                                terraform show -no-color tfplan
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -144,13 +130,13 @@ pipeline {
                 script {
                     if (params.ACTION == 'apply') {
                         input(
-                            message: 'Do you want to APPLY the GCP Terraform infrastructure?',
-                            ok: 'Proceed'
+                            message: 'Review the plan. Do you want to APPLY the AWS infrastructure changes?',
+                            ok: 'Approve Apply'
                         )
                     } else {
                         input(
-                            message: 'WARNING: Do you want to DESTROY the GCP Terraform infrastructure?',
-                            ok: 'Proceed'
+                            message: 'WARNING: This will destroy the resources in the saved plan. Continue?',
+                            ok: 'Approve Destroy'
                         )
                     }
                 }
@@ -166,22 +152,17 @@ pipeline {
 
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'gcp-jenkins-credentials',
-                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-jenkins-credentials']
                 ]) {
-                    sh '''
-                        set -e
-
-                        echo "======================================"
-                        echo "Terraform Apply - GCP"
-                        echo "======================================"
-
-                        terraform apply -auto-approve tfplan
-
-                        echo ""
-                        echo "Terraform Apply Completed Successfully"
+                    bat '''
+                        @echo off
+                        echo ======================================
+                        echo Terraform Apply - AWS
+                        echo ======================================
+                        terraform apply -input=false -auto-approve tfplan
+                        if errorlevel 1 exit /b 1
+                        echo Terraform Apply Completed Successfully
                     '''
                 }
             }
@@ -196,22 +177,17 @@ pipeline {
 
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'gcp-jenkins-credentials',
-                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-jenkins-credentials']
                 ]) {
-                    sh '''
-                        set -e
-
-                        echo "======================================"
-                        echo "Terraform Destroy - GCP"
-                        echo "======================================"
-
-                        terraform destroy -auto-approve
-
-                        echo ""
-                        echo "Terraform Destroy Completed Successfully"
+                    bat '''
+                        @echo off
+                        echo ======================================
+                        echo Terraform Destroy - AWS
+                        echo ======================================
+                        terraform apply -input=false -auto-approve tfplan
+                        if errorlevel 1 exit /b 1
+                        echo Terraform Destroy Completed Successfully
                     '''
                 }
             }
@@ -226,22 +202,16 @@ pipeline {
 
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'gcp-jenkins-credentials',
-                        variable: 'GOOGLE_APPLICATION_CREDENTIALS'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                     credentialsId: 'aws-jenkins-credentials']
                 ]) {
-                    sh '''
-                        set -e
-
-                        echo "======================================"
-                        echo "Terraform Outputs - GCP"
-                        echo "======================================"
-
+                    bat '''
+                        @echo off
+                        echo ======================================
+                        echo Terraform Outputs - AWS
+                        echo ======================================
                         terraform output
-
-                        echo ""
-                        echo "Terraform Outputs Retrieved Successfully"
+                        if errorlevel 1 exit /b 1
                     '''
                 }
             }
@@ -250,28 +220,27 @@ pipeline {
 
     post {
         success {
-            echo "======================================"
-            echo "GCP Terraform Pipeline Completed Successfully"
-            echo "======================================"
+            echo '======================================'
+            echo 'AWS Terraform Pipeline Completed Successfully'
+            echo '======================================'
         }
 
         failure {
-            echo "======================================"
-            echo "GCP Terraform Pipeline Failed"
-            echo "Please check the Jenkins console logs."
-            echo "======================================"
+            echo '======================================'
+            echo 'AWS Terraform Pipeline Failed'
+            echo 'Check the Jenkins Console Output.'
+            echo '======================================'
         }
 
         aborted {
-            echo "======================================"
-            echo "GCP Terraform Pipeline Aborted"
-            echo "======================================"
+            echo 'AWS Terraform Pipeline Aborted'
         }
 
         always {
-            sh '''
-                rm -f tfplan 2>/dev/null || true
-            '''
+            bat(
+                returnStatus: true,
+                script: '@if exist tfplan del /q tfplan'
+            )
         }
     }
 }
