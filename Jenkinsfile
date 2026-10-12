@@ -20,15 +20,6 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-1'
         AWS_REGION = 'us-east-1'
     }
-
-    stages {
-
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('AWS Authentication & Terraform Validation') {
             steps {
                 script {
