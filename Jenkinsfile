@@ -48,8 +48,16 @@ pipeline {
                             if errorlevel 1 exit /b 1
 
                             echo.
+                            echo Cleaning local Terraform initialization cache
+                            if exist .terraform rmdir /s /q .terraform
+                            if exist .terraform (
+                                echo ERROR: Could not remove .terraform directory
+                                exit /b 1
+                            )
+
+                            echo.
                             echo Terraform Init
-                            terraform init -input=false
+                            terraform init -input=false -no-color
                             if errorlevel 1 exit /b 1
 
                             echo.
@@ -59,7 +67,7 @@ pipeline {
 
                             echo.
                             echo Terraform Validate
-                            terraform validate
+                            terraform validate -no-color
                             if errorlevel 1 exit /b 1
                         '''
                     }
@@ -78,8 +86,11 @@ pipeline {
                             bat '''
                                 @echo off
                                 echo Terraform Destroy Plan - AWS
-                                terraform plan -destroy -input=false -out=tfplan
+                                terraform plan -destroy -input=false -no-color -out=tfplan
                                 if errorlevel 1 exit /b 1
+
+                                echo.
+                                echo Reviewing saved destroy plan
                                 terraform show -no-color tfplan
                                 if errorlevel 1 exit /b 1
                             '''
@@ -87,8 +98,11 @@ pipeline {
                             bat '''
                                 @echo off
                                 echo Terraform Plan - AWS
-                                terraform plan -input=false -out=tfplan
+                                terraform plan -input=false -no-color -out=tfplan
                                 if errorlevel 1 exit /b 1
+
+                                echo.
+                                echo Reviewing saved plan
                                 terraform show -no-color tfplan
                                 if errorlevel 1 exit /b 1
                             '''
@@ -109,12 +123,12 @@ pipeline {
                 script {
                     if (params.ACTION == 'apply') {
                         input(
-                            message: 'Review the plan. Approve AWS infrastructure changes?',
+                            message: 'Review the Terraform plan in Console Output. Approve AWS infrastructure changes?',
                             ok: 'Approve Apply'
                         )
                     } else {
                         input(
-                            message: 'WARNING: Approve destruction of the resources in the saved plan?',
+                            message: 'WARNING: Review the destroy plan carefully. Approve destruction of the resources in the saved plan?',
                             ok: 'Approve Destroy'
                         )
                     }
@@ -136,7 +150,7 @@ pipeline {
                     bat '''
                         @echo off
                         echo Terraform Apply - AWS
-                        terraform apply -input=false -auto-approve tfplan
+                        terraform apply -input=false -no-color -auto-approve tfplan
                         if errorlevel 1 exit /b 1
                         echo Terraform Apply Completed Successfully
                     '''
@@ -158,7 +172,7 @@ pipeline {
                     bat '''
                         @echo off
                         echo Terraform Destroy - AWS
-                        terraform apply -input=false -auto-approve tfplan
+                        terraform apply -input=false -no-color -auto-approve tfplan
                         if errorlevel 1 exit /b 1
                         echo Terraform Destroy Completed Successfully
                     '''
@@ -211,3 +225,4 @@ pipeline {
         }
     }
 }
+
