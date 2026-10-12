@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -20,39 +21,11 @@ pipeline {
         AWS_DEFAULT_REGION = 'us-east-1'
         AWS_REGION = 'us-east-1'
     }
+
+    stages {
         stage('AWS Authentication & Terraform Validation') {
             steps {
                 script {
-                    bat '''
-                        @echo off
-                        echo ======================================
-                        echo Terraform Version
-                        echo ======================================
-                        terraform version
-                        if errorlevel 1 exit /b 1
-
-                        echo.
-                        echo ======================================
-                        echo Terraform Init
-                        echo ======================================
-                        terraform init -input=false
-                        if errorlevel 1 exit /b 1
-
-                        echo.
-                        echo ======================================
-                        echo Terraform Format Check
-                        echo ======================================
-                        terraform fmt -check -recursive
-                        if errorlevel 1 exit /b 1
-
-                        echo.
-                        echo ======================================
-                        echo Terraform Validate
-                        echo ======================================
-                        terraform validate
-                        if errorlevel 1 exit /b 1
-                    '''
-
                     withCredentials([
                         [$class: 'AmazonWebServicesCredentialsBinding',
                          credentialsId: 'aws-jenkins-credentials']
@@ -68,6 +41,26 @@ pipeline {
                             echo.
                             echo AWS CLI Version
                             aws --version
+                            if errorlevel 1 exit /b 1
+
+                            echo.
+                            echo Terraform Version
+                            terraform version
+                            if errorlevel 1 exit /b 1
+
+                            echo.
+                            echo Terraform Init
+                            terraform init -input=false
+                            if errorlevel 1 exit /b 1
+
+                            echo.
+                            echo Terraform Format Check
+                            terraform fmt -check -recursive
+                            if errorlevel 1 exit /b 1
+
+                            echo.
+                            echo Terraform Validate
+                            terraform validate
                             if errorlevel 1 exit /b 1
                         '''
                     }
@@ -85,22 +78,20 @@ pipeline {
                         if (params.ACTION == 'destroy') {
                             bat '''
                                 @echo off
-                                echo ======================================
                                 echo Terraform Destroy Plan - AWS
-                                echo ======================================
                                 terraform plan -destroy -input=false -out=tfplan
                                 if errorlevel 1 exit /b 1
                                 terraform show -no-color tfplan
+                                if errorlevel 1 exit /b 1
                             '''
                         } else {
                             bat '''
                                 @echo off
-                                echo ======================================
                                 echo Terraform Plan - AWS
-                                echo ======================================
                                 terraform plan -input=false -out=tfplan
                                 if errorlevel 1 exit /b 1
                                 terraform show -no-color tfplan
+                                if errorlevel 1 exit /b 1
                             '''
                         }
                     }
@@ -115,17 +106,16 @@ pipeline {
                            params.ACTION == 'destroy'
                 }
             }
-
             steps {
                 script {
                     if (params.ACTION == 'apply') {
                         input(
-                            message: 'Review the plan. Do you want to APPLY the AWS infrastructure changes?',
+                            message: 'Review the plan. Approve AWS infrastructure changes?',
                             ok: 'Approve Apply'
                         )
                     } else {
                         input(
-                            message: 'WARNING: This will destroy the resources in the saved plan. Continue?',
+                            message: 'WARNING: Approve destruction of the resources in the saved plan?',
                             ok: 'Approve Destroy'
                         )
                     }
@@ -139,7 +129,6 @@ pipeline {
                     return params.ACTION == 'apply'
                 }
             }
-
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -147,9 +136,7 @@ pipeline {
                 ]) {
                     bat '''
                         @echo off
-                        echo ======================================
                         echo Terraform Apply - AWS
-                        echo ======================================
                         terraform apply -input=false -auto-approve tfplan
                         if errorlevel 1 exit /b 1
                         echo Terraform Apply Completed Successfully
@@ -164,7 +151,6 @@ pipeline {
                     return params.ACTION == 'destroy'
                 }
             }
-
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -172,9 +158,7 @@ pipeline {
                 ]) {
                     bat '''
                         @echo off
-                        echo ======================================
                         echo Terraform Destroy - AWS
-                        echo ======================================
                         terraform apply -input=false -auto-approve tfplan
                         if errorlevel 1 exit /b 1
                         echo Terraform Destroy Completed Successfully
@@ -189,7 +173,6 @@ pipeline {
                     return params.ACTION == 'apply'
                 }
             }
-
             steps {
                 withCredentials([
                     [$class: 'AmazonWebServicesCredentialsBinding',
@@ -197,9 +180,7 @@ pipeline {
                 ]) {
                     bat '''
                         @echo off
-                        echo ======================================
                         echo Terraform Outputs - AWS
-                        echo ======================================
                         terraform output
                         if errorlevel 1 exit /b 1
                     '''
@@ -234,3 +215,4 @@ pipeline {
         }
     }
 }
+```
