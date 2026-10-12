@@ -207,10 +207,7 @@ pipeline {
         }
 
         always {
-            bat(
-                returnStatus: true,
-                script: '@if exist tfplan del /q tfplan'
-            )
+            echo 'Pipeline execution finished.'
         }
     }
 }
