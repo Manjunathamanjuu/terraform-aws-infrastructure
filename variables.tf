@@ -7,9 +7,8 @@ variable "aws_region" {
 variable "aws_account_id" {
   description = "AWS account ID"
   type        = string
-  default     = "980921723264"
+  default     = "376159574623"
 }
-
 variable "ami_id" {
   description = "AMI ID for the EC2 instance"
   type        = string
@@ -26,9 +25,9 @@ variable "instance_type" {
 }
 
 variable "key_pair_name" {
-  description = "Existing AWS EC2 key pair name"
+  description = "Name of the existing AWS EC2 key pair"
   type        = string
-  default     = "jenkins-ci-cd-keypair"
+  default     = "terraform-key-pair"
 }
 
 variable "environment" {
